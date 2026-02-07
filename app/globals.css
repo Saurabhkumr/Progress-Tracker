@@ -1,6 +1,13 @@
+@import url('https://fonts.googleapis.com/css2?family=Merriweather:wght@300;400;700&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+
+.font-serif-news {
+  font-family: 'Merriweather', serif;
+}
+
 
 /* Global font & rendering polish */
 html {
@@ -50,3 +57,24 @@ body {
   background-color: rgb(120 113 108); /* stone-400 */
 }
 
+@keyframes menuIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(+4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-menu-in {
+  animation: menuIn 0.15s ease-out forwards;
+}
+
+
+html {
+  -webkit-font-smoothing: antialiased; /* Chrome, Safari */
+  -moz-osx-font-smoothing: grayscale;  /* Firefox on Mac */
+  text-rendering: optimizeLegibility;
+}

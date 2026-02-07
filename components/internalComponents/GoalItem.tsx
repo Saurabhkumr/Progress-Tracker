@@ -1,13 +1,15 @@
 
 "use client";
 
-import { useState } from "react";
-import { ChevronRight, Fullscreen, Plus } from "lucide-react";
-import GoalDetails from "./GoalDetails";
+import { useEffect, useRef, useState } from "react";
+import { ChevronRight, Ellipsis, Fullscreen, Plus, RectangleEllipsis } from "lucide-react";
 import RecurrenceModal from "./RecurrenceModal";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical } from "lucide-react";
+import GoalDetails from "./GoalDetails";
+import MenuItem from "./MenuItem";
+import { useDeleteGoal } from "@/hooks/useDeleteGoal";
 
 
 function extractTags(text: string): string[] {
@@ -24,24 +26,29 @@ function removeTags(text: string): string {
 
 
 export interface Goal {
+    day_goal_id: string;
     recurrence_group_id: any;
     id: string;
     title: string;
     is_completed: boolean;
     description?: string;
     notes?: string;
+    isHome?: boolean;
 }
 
 export default function GoalItem({
     goal,
-    onUpdate,
+    updateGoalText,
+    updateGoalStatus,
     isFullscreen,
     onFocus,
     isActive,
+    isHome = false,
 
 }: {
     goal: Goal;
-    onUpdate: (updated: Goal) => void;
+    updateGoalText: (updated: Goal) => void;
+    updateGoalStatus: (updated: Goal) => void;
     isFullscreen: boolean;
     onFocus: () => void;
     isActive: boolean;
@@ -49,6 +56,15 @@ export default function GoalItem({
     const [expanded, setExpanded] = useState(false);
     const [editing, setEditing] = useState(false);
     const [showRecurrenceModal, setShowRecurrenceModal] = useState(false);
+    const [localTitle, setLocalTitle] = useState(goal.title)
+    const [showMenu, setShowMenu] = useState(false);
+    const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
+
+    const menuRef = useRef<HTMLDivElement | null>(null);
+    const ellipsisRef = useRef<HTMLButtonElement | null>(null);
+
+    const deleteGoalMutation = useDeleteGoal();
+
 
     const {
         attributes,
@@ -64,6 +80,29 @@ export default function GoalItem({
         transition,
     };
 
+    useEffect(() => {
+        setLocalTitle(goal.title);
+    }, [goal.title])
+
+    useEffect(() => {
+        function handleClickOutside(e: MouseEvent) {
+            if (
+                showMenu &&
+                menuRef.current &&
+                !menuRef.current.contains(e.target as Node) &&
+                ellipsisRef.current &&
+                !ellipsisRef.current.contains(e.target as Node)
+            ) {
+                setShowMenu(false);
+            }
+        }
+
+        document.addEventListener("mousedown", handleClickOutside);
+
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+        };
+    }, [showMenu]);
 
 
     return (
@@ -74,9 +113,11 @@ export default function GoalItem({
                 transition,
             }}
             className={`
-    group rounded-lg p-3
+    group p-3
     flex flex-col
     transition-colors duration-200
+    ${isHome && goal.index === 0 ? "rounded-t-xl" : ""}
+
 
     ${isDragging
                     ? "opacity-60 bg-stone-700/60"
@@ -86,6 +127,7 @@ export default function GoalItem({
                             ? "bg-stone-800/60"
                             : "bg-stone-800/40"
                 }
+    ${isHome ? "opacity-70 hover:opacity-100 bg-stone-800/20" : ""}
   `}
         >
 
@@ -108,7 +150,7 @@ export default function GoalItem({
 
                 <button
                     onClick={() =>
-                        onUpdate({ ...goal, is_completed: !goal.is_completed })
+                        updateGoalStatus({ ...goal, is_completed: !goal.is_completed })
                     }
                     className={`
             w-4 h-4 rounded-[4px] border flex items-center justify-center
@@ -138,11 +180,16 @@ export default function GoalItem({
                 <div className="flex-1 ml-1">
                     {editing ? (
                         <input
-                            value={goal.title}
+                            value={localTitle}
                             autoFocus
-                            onChange={(e) =>
-                                onUpdate({ ...goal, title: e.target.value })
-                            }
+                            onChange={(e) => {
+                                setLocalTitle(e.target.value);
+
+                                updateGoalText({
+                                    ...goal,
+                                    title: e.target.value,
+                                });
+                            }}
                             onBlur={() => setEditing(false)}
                             className={`w-full bg-transparent focus:outline-none font-bold
         ${goal.is_completed ? "line-through text-stone-500" : ""}
@@ -287,10 +334,79 @@ export default function GoalItem({
             >
                 <GoalDetails
                     goal={goal}
-                    onUpdate={onUpdate}
+                    onUpdate={updateGoalText}
                     isFullscreen={isFullscreen}
                 />
             </div>
+            {expanded && !isFullscreen && (
+                <div className="flex justify-end mt-0">
+
+                    {/* Ellipsis Button */}
+                    <button
+                        ref={ellipsisRef}
+                        onClick={(e) => {
+                            e.stopPropagation();
+
+                            const rect = e.currentTarget.getBoundingClientRect();
+
+                            setMenuPos({
+                                top: rect.top - 10,
+                                left: rect.left - 120,
+                            });
+
+                            setShowMenu(prev => !prev);
+                        }}
+                        className="p-1 rounded hover:bg-stone-700/50 transition"
+                    >
+                        <Ellipsis color="#666666" />
+                    </button>
+
+                    {/* Floating Menu (Portal-like) */}
+                    {showMenu && (
+                        <div
+                            ref={menuRef}
+                            style={{
+                                top: menuPos.top + 20,
+                                left: menuPos.left + 200,
+                            }}
+                            className="
+          fixed
+          z-[9999]
+          w-40
+          origin-top-right
+          animate-menu-in
+            rounded-2xl
+            bg-gradient-to-br from-stone-800/90 to-stone-900/90
+            border border-stone-700/30
+            backdrop-blur-xl
+            shadow-[0_20px_40px_rgba(0,0,0,0.6)]
+            overflow-hidden
+        "
+                        >
+                            <MenuItem onClick={() => setEditing(true)}>
+                                Edit
+                            </MenuItem>
+
+                            <MenuItem onClick={() => updateGoalStatus({ ...goal, is_completed: true })}>
+                                Mark Complete
+                            </MenuItem>
+
+                            <MenuItem
+                                danger
+                                disabled={deleteGoalMutation.isPending}
+                                onClick={() => {
+                                    deleteGoalMutation.mutate(goal.day_goal_id);
+                                }}
+                            >
+                                {deleteGoalMutation.isPending ? "Deleting..." : "Delete"}
+                            </MenuItem>
+
+                        </div>
+                    )}
+                </div>
+            )}
+
+
             <RecurrenceModal isOpen={showRecurrenceModal} onClose={() => setShowRecurrenceModal(false)} />
         </div>
     );
